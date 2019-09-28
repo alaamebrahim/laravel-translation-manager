@@ -66,4 +66,9 @@ return [
         '$trans.get',
     ],
 
+    'modules' => [
+        'supported' => true,
+        'path' => app_path('Modules'),
+        'lang_path' => 'Resources/lang'
+    ]
 ];

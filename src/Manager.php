@@ -252,7 +252,26 @@ class Manager
 
     public function exportTranslations($group = null, $json = false)
     {
-        $basePath = $this->app['path.lang'];
+        $isModule = Str::contains($group, '::') && data_get($this->config, 'modules.supported');
+
+        $basePath = null;
+
+        if ($isModule) {
+            $groupParts = explode('::', $group);
+            if (is_array($groupParts) && count($groupParts) > 0) {
+                $basePath = data_get($this->config, 'modules.path') . DIRECTORY_SEPARATOR .
+                    Str::ucfirst($groupParts[0]) . DIRECTORY_SEPARATOR .
+                    data_get($this->config, 'modules.lang_path', 'Resources/lang');
+
+                if (!is_dir($basePath)) {
+                    mkdir($basePath);
+                }
+
+                $originalGroup = $group;
+            }
+        }
+
+        $basePath =  $basePath ?? $this->app['path.lang'];
 
         if (! is_null($group) && ! $json) {
             if (! in_array($group, $this->config['exclude_groups'])) {
@@ -266,13 +285,15 @@ class Manager
                 }
 
                 $tree = $this->makeTree(Translation::ofTranslatedGroup($group)
-                                                    ->orderByGroupKeys(Arr::get($this->config, 'sort_keys', false))
-                                                    ->get());
+                    ->orderByGroupKeys(Arr::get($this->config, 'sort_keys', false))
+                    ->get());
 
                 foreach ($tree as $locale => $groups) {
+
                     if (isset($groups[$group])) {
                         $translations = $groups[$group];
-                        $path = $this->app['path.lang'];
+                        $path = $basePath;
+                        $group = isset($groupParts) && is_array($groupParts) && count($groupParts) > 0 ? $groupParts[1] : $group;
 
                         $locale_path = $locale.DIRECTORY_SEPARATOR.$group;
                         if ($vendor) {
@@ -295,7 +316,10 @@ class Manager
                         $path = $path.DIRECTORY_SEPARATOR.$locale.DIRECTORY_SEPARATOR.$group.'.php';
 
                         $output = "<?php\n\nreturn ".var_export($translations, true).';'.\PHP_EOL;
+
                         $this->files->put($path, $output);
+
+                        $group = $originalGroup ?? $group;
                     }
                 }
                 Translation::ofTranslatedGroup($group)->update(['status' => Translation::STATUS_SAVED]);
@@ -304,8 +328,8 @@ class Manager
 
         if ($json) {
             $tree = $this->makeTree(Translation::ofTranslatedGroup(self::JSON_GROUP)
-                                                ->orderByGroupKeys(Arr::get($this->config, 'sort_keys', false))
-                                                ->get(), true);
+                ->orderByGroupKeys(Arr::get($this->config, 'sort_keys', false))
+                ->get(), true);
 
             foreach ($tree as $locale => $groups) {
                 if (isset($groups[self::JSON_GROUP])) {
